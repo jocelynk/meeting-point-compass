@@ -40,20 +40,6 @@ angular.module('starter.controllers', [])
       }, 1000);
     };
   })
-
-  .controller('PlaylistsCtrl', function ($scope) {
-    $scope.playlists = [
-      {title: 'Reggae', id: 1},
-      {title: 'Chill', id: 2},
-      {title: 'Dubstep', id: 3},
-      {title: 'Indie', id: 4},
-      {title: 'Rap', id: 5},
-      {title: 'Cowbell', id: 6}
-    ];
-  })
-
-  .controller('PlaylistCtrl', function ($scope, $stateParams) {
-  })
   .controller('MapCtrl', function ($scope, $stateParams, $ionicLoading) {
     // User Infomation
     $scope.currentUserInfo = null;
@@ -62,8 +48,9 @@ angular.module('starter.controllers', [])
     $scope.map = null;
     $scope.infowindow = null;
     $scope.refreshTimeout = null;
+    $scope.refreshLocationTimeout = null;
 
-    $scope.initLocationSharing = function(location_callback, error_callback) {
+    $scope.initLocationSharing = function(location_callback) {
       var randomGuid = guid();
       $scope.userInfo = {
         id: randomGuid, // Something like.. 5dccc6c8-717d-49928b84
@@ -79,10 +66,10 @@ angular.module('starter.controllers', [])
       $scope.socket.on('connect', function () {
         $scope.socket.on('location', function (location) {
           console.log("emitting location");
-          if (location.id != $scope.userInfo.id) {
-            console.log("userLocationUpdate")
-            $scope.userLocationUpdate(location);
-          }
+          //#if (!(location.id in $scope.users)) {
+            //console.log("userLocationUpdate")
+          location_callback(location);
+          //}
         })
       });
 
@@ -93,11 +80,16 @@ angular.module('starter.controllers', [])
         return $scope.userInfo;
       }
 
-      $scope.geo_success = function (position) {
-        $scope.userInfo.latitude = position.coords.latitude + $scope.userInfo.randomCoord;
-        $scope.userInfo.longitude = position.coords.longitude + $scope.userInfo.randomCoord;
+      $scope.geo_success = function (position, coordinates) {
         console.log("geosuccess");
-        $scope.userLocationUpdate($scope.userInfo);
+        if(coordinates) {
+          $scope.userInfo.latitude = coordinates.latitude + Math.random();
+          $scope.userInfo.longitude = coordinates.longitude + Math.random()
+        } else {
+          $scope.userInfo.latitude = position.coords.latitude + Math.random();
+          $scope.userInfo.longitude = position.coords.longitude + Math.random();
+        }
+        location_callback($scope.userInfo);
         $scope.sendLocation();
       };
 
@@ -110,14 +102,27 @@ angular.module('starter.controllers', [])
         $scope.socket.emit('location', $scope.userInfo);
         clearTimeout($scope.sendLocationTimeout);
         $scope.sendLocationTimeout = setTimeout($scope.sendLocation, 1000 * 5);
-      }
+      };
 
       $scope.geo_options = {enableHighAccuracy: true};
       navigator.geolocation.watchPosition($scope.geo_success, $scope.geo_error, $scope.geo_options);
       navigator.geolocation.getCurrentPosition($scope.geo_success, $scope.geo_error, $scope.geo_options);
-      console.log("returning userInfo: " + $scope.userInfo)
+
+      // Refresh the markers every 2 seconds
+      clearTimeout($scope.refreshLocationTimeout)
+      $scope.refreshLocationTimeout = setTimeout(function() {
+        coordinates = {latitude: $scope.userInfo.latitude, longitude:  $scope.userInfo.longitude}
+        $scope.geo_success(null, coordinates);
+      }, 1000 * 2);
+
+      setInterval(function() {
+        coordinates = {latitude: $scope.userInfo.latitude, longitude:  $scope.userInfo.longitude}
+        $scope.geo_success(null, coordinates);
+      }, 2000);
+
+
       return $scope.userInfo;
-    }
+    };
 
     $scope.userLocationUpdate = function (userInfo) {
       console.log("updating location")
@@ -126,15 +131,17 @@ angular.module('starter.controllers', [])
       $scope.users[userInfo.id].name = userInfo.name;
       $scope.users[userInfo.id].latitude = userInfo.latitude;
       $scope.users[userInfo.id].longitude = userInfo.longitude;
-      $scope.users[userInfo.id].timestamp = new Date().getTime()
-      console.log($scope.users[userInfo.id]);
+      $scope.users[userInfo.id].timestamp = new Date().getTime();
+      console.log(userInfo.name);
+      console.log(userInfo.latitude);
+      console.log(userInfo.longitude);
+      console.log(userInfo.timestamp);
       $scope.refreshMarkers();
     };
 
     $scope.refreshMarkers = function () {
       if (!$scope.map) return;
       console.log("refreshing markers")
-      console.log($scope.map);
       if (!$scope.currentUserInfo.movedMapCenter && $scope.currentUserInfo.timestamp) {
         /* $('#user-name').val(currentUserInfo.name);
          $('#user-name').bind('keyup', function() {
@@ -168,16 +175,17 @@ angular.module('starter.controllers', [])
           userInfo.marker = marker;
         }
         //Move the markers
+        console.log("moving the marker");
         userInfo.marker.setTitle(userInfo.name);
         userInfo.marker.setPosition(
           new google.maps.LatLng(userInfo.latitude, userInfo.longitude));
       }
 
       /* $('#user-number').text(Math.max(Object.keys(users).length-1,0) +'')*/
-      // Refresh the markers every 20 seconds
+      // Refresh the markers every 2 seconds
       clearTimeout($scope.refreshTimeout)
-      $scope.refreshTimeout = setTimeout($scope.refreshMarkers, 1000 * 20);
-    }
+      $scope.refreshTimeout = setTimeout($scope.refreshMarkers, 1000 * 2);
+    };
 
     $scope.mapInitialize = function () {
       console.log("initilizing map")
@@ -186,7 +194,6 @@ angular.module('starter.controllers', [])
         center: new google.maps.LatLng(40, -74),
         mapTypeId: google.maps.MapTypeId.ROADMAP
       });
-      $scope.currentUserInfo = $scope.initLocationSharing($scope.userLocationUpdate);
       $scope.infowindow = new google.maps.InfoWindow({content: 'Test'});
       google.maps.event.addListener(map, 'click', function () {
         infowindow.close(map);
@@ -194,7 +201,21 @@ angular.module('starter.controllers', [])
       $scope.refreshMarkers();
     };
 
-    $scope.mapInitialize()
+    $scope.currentUserInfo = $scope.initLocationSharing($scope.userLocationUpdate);
+    $scope.mapInitialize();
+
+
+    // delete inactive users every 15 sec
+/*    setInterval(function() {
+      for (var ident in connects){
+        if ($.now() - connects[ident].updated > 15000) {
+          delete connects[ident];
+          map.removeLayer(markers[ident]);
+        }
+      }
+    }, 15000);
+    */
+
     //google.maps.event.addDomListener(window, 'load', $scope.mapInitialize);
 
 
