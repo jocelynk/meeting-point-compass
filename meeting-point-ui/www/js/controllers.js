@@ -61,7 +61,7 @@ angular.module('starter.controllers', [])
       // ================================
       // Setup Socket IO
       // ================================
-      $scope.socket = io.connect('http://localhost:8080');
+      $scope.socket = io.connect('http://192.168.1.4:8888');
 
       $scope.socket.on('connect', function () {
         $scope.socket.on('location', function (location) {
