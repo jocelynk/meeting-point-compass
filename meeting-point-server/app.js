@@ -12,6 +12,13 @@ var sockets = require('./routes/sockets');
 
 var app = express();
 
+var http = require('http');
+
+http.createServer(function(req, res){
+  res.writeHead(200, {'content-type': 'text/plain'});
+  res.end('It works');
+}).listen(3000, '0.0.0.0');
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
