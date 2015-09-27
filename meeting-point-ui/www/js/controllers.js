@@ -40,7 +40,7 @@ angular.module('starter.controllers', [ 'ngCordova'])
       }, 1000);
     };
   })
-  .controller('MapCtrl', function ($scope, $stateParams, $ionicLoading, $cordovaGeolocation) {
+  .controller('MapCtrl', function ($scope, $cordovaGeolocation) {
     var iconBase = './img/';
     $scope.icons = {
       1: {
